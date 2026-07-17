@@ -1,15 +1,16 @@
 # Task Scheduler
 
-AI-powered daily planner: it looks at your goals, weekly schedule, recent sleep/energy
-logs, and recent task-completion history, then asks Claude to generate a realistic plan
-for the day - and lets you check in with a coach-style chat that has memory of your
-whole history, not just the current message.
+An AI-powered daily planner that utilizes the Claude API to help you manage your day effectively. It analyzes your goals, weekly schedule, recent sleep/energy logs, and task-completion history to generate a realistic daily plan. It also features a coach-style chat that retains memory of your entire history for continuous support and check-ins.
 
 ## Stack
 
-Java 17 · Spring Boot 4.0.4 · Spring Data JPA · H2 (dev) / PostgreSQL (prod) · Claude API
+- Java 17
+- Spring Boot 4.0.4
+- Spring Data JPA
+- H2 Database (Development) / PostgreSQL (Production)
+- Claude API
 
-## Project layout
+## Project Layout
 
 ```
 model/        JPA entities (Task, SubTask, UserProfile, DailyLog, ChatMessage)
@@ -19,44 +20,62 @@ controller/   REST endpoints
 dto/          Request/response shapes for the chat & plan endpoints
 config/       WebClient bean for the Claude API
 resources/
-  static/index.html     the whole frontend (served by Spring Boot itself)
-  application.properties        dev config (H2)
-  application-prod.properties   prod config (Postgres, activated via a Spring profile)
+  static/index.html             Frontend UI (served by Spring Boot)
+  application.properties        Development config (H2)
+  application-prod.properties   Production config (Postgres)
 ```
 
-## 1. Run it locally
+## Running Locally
 
-You need Java 17+ and a Claude API key from the [Anthropic Console](https://console.anthropic.com).
+### Prerequisites
 
-```bash
-git clone <your repo url>
-cd task-scheduler
-cp .env.example .env      # then edit .env and paste in your real key
-export $(cat .env | xargs)  # loads CLAUDE_API_KEY into your shell (macOS/Linux)
-./mvnw spring-boot:run
-```
+- Java 17 or higher
+- A Claude API key from the [Anthropic Console](https://console.anthropic.com)
 
-On Windows (PowerShell):
-```powershell
-$env:CLAUDE_API_KEY = "sk-ant-your-key-here"
-.\mvnw.cmd spring-boot:run
-```
+### Setup
 
-The app starts on **http://localhost:8080** - open that URL and you'll see the frontend
-directly (it's served from `resources/static/index.html`, no separate frontend process
-needed). Your H2 database is a file at `./data/taskschedulerdb.mv.db`, so your tasks and
-chat history survive restarts. Browse it directly at **http://localhost:8080/h2-console**
-(JDBC URL: `jdbc:h2:file:./data/taskschedulerdb`, username `sa`, blank password).
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd task-scheduler
+   ```
 
-### First run walkthrough
+2. Configure environment variables:
+   Copy the example environment file and add your Claude API key.
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Load the environment variable:
+   * **macOS/Linux:**
+     ```bash
+     export $(cat .env | xargs)
+     ```
+   * **Windows (PowerShell):**
+     ```powershell
+     $env:CLAUDE_API_KEY = "your-api-key-here"
+     ```
+
+3. Run the application:
+   ```bash
+   ./mvnw spring-boot:run
+   ```
+   *(On Windows, use `.\mvnw.cmd spring-boot:run`)*
+
+The application will start on **http://localhost:8080**. The frontend is served directly from `resources/static/index.html`. 
+
+The local development environment uses an H2 file-based database located at `./data/taskschedulerdb.mv.db`, ensuring your tasks and chat history persist across restarts. You can access the H2 console at **http://localhost:8080/h2-console** (JDBC URL: `jdbc:h2:file:./data/taskschedulerdb`, Username: `sa`, Password: `[blank]`).
+
+### Basic Usage Flow
 1. Fill in the **Profile** card (goals, weekly schedule, baseline sleep) and save it.
-2. Optionally log today's sleep/energy in the **Today's log** card.
-3. Click **Generate plan** - this calls Claude and creates today's tasks + subtasks.
-4. Drag the sliders on each subtask to update completion (`PATCH /api/subtask/{id}`).
-5. Use the **Check in** chatbox at the bottom - it has full memory of prior messages
-   plus your logs and task history, so it can call out real patterns.
+2. Log today's sleep and energy metrics in the **Today's log** card.
+3. Click **Generate plan** to invoke the AI planner to create today's tasks and subtasks.
+4. Update subtask completion using the sliders on each subtask.
+5. Use the **Check in** chatbox for personalized coaching based on your activity and history.
 
-## 2. Test the API directly (no frontend)
+## API Reference
+
+You can interact with the API directly without the frontend:
 
 ```bash
 # Profile
@@ -81,31 +100,18 @@ curl -X POST http://localhost:8080/api/chat -H "Content-Type: application/json" 
 curl http://localhost:8080/api/chat/history
 ```
 
-## 3. Deploy
+## Deployment
 
-**Database:** create a free Postgres instance on [Neon](https://neon.tech) or
-[Railway](https://railway.app) - either gives you a connection string in under 10 minutes.
+To deploy the application for production, you will need a PostgreSQL database and a hosting provider that supports Java Spring Boot applications.
 
-**Backend:** deploy this repo to [Railway](https://railway.app) or
-[Render](https://render.com) (both auto-detect a Maven/Spring Boot app, or you can add a
-`Dockerfile` if you want more control). Set these environment variables on the host:
+Ensure the following environment variables are set in your production environment:
 
-| Variable | Value |
+| Variable | Description |
 |---|---|
-| `SPRING_PROFILES_ACTIVE` | `prod` |
-| `DATABASE_URL` | `jdbc:postgresql://<host>:<port>/<db>` from your Postgres provider |
-| `DATABASE_USERNAME` | from your Postgres provider |
-| `DATABASE_PASSWORD` | from your Postgres provider |
-| `CLAUDE_API_KEY` | your real Anthropic API key |
+| `SPRING_PROFILES_ACTIVE` | Set to `prod` to activate production configurations |
+| `DATABASE_URL` | PostgreSQL connection string (e.g., `jdbc:postgresql://<host>:<port>/<db>`) |
+| `DATABASE_USERNAME` | Database username |
+| `DATABASE_PASSWORD` | Database password |
+| `CLAUDE_API_KEY` | Your Anthropic API key |
 
-**Frontend:** nothing extra to do - `index.html` is served by the same Spring Boot app,
-so one deploy gives you the whole thing at one URL.
-
-## Known model quirks worth knowing before an interview
-
-- `Task.setDone()` (marks `status = true`) has no way to un-set it, and nothing in this
-  build currently calls it - task completion for the UI is derived purely from subtask
-  percentages (`TaskService.isTaskFullyDone`). Worth deciding if you want `status` to mean
-  something distinct from subtask completion, or to drop it.
-- The single-user profile assumes the first `UserProfile` row ends up with `id=1`. Fine
-  for a single-user demo app; would need a real user/session model to scale.
+The frontend is packaged and served by the Spring Boot application, requiring no separate deployment process.
