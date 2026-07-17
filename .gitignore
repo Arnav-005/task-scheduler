@@ -35,3 +35,8 @@ build/
 *.db
 *.mv.db
 *.trace.db
+/data/
+
+### Env files ###
+.env
+.env.local

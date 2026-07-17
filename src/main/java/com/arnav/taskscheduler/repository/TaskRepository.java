@@ -13,6 +13,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     //one custom method for fetching tasks by date
     List<Task> findByTaskDate(LocalDate date);
+
+    //used by AiPlanningService to pull the last few days of completion history for context
+    List<Task> findByTaskDateBetween(LocalDate start, LocalDate end);
 }
 
 //NOTE:

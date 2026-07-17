@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Scheduler</title>
+<style>
+  :root {
+    --paper: #f3f5f1;
+    --ink: #1f2b28;
+    --ink-soft: #4c5a56;
+    --line: #d9ddd7;
+    --teal: #2f6f62;
+    --teal-soft: #e2ede9;
+    --amber: #d99a4e;
+    --card: #ffffff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+  header.top h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .eyebrow {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .ring-wrap { display: flex; align-items: center; gap: 10px; }
+  .ring-label { font-size: 0.78rem; color: var(--ink-soft); text-align: right; }
+  .ring-label strong { display: block; color: var(--ink); font-size: 1rem; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+  .card h2 {
+    font-size: 0.95rem;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  label { display: block; font-size: 0.78rem; color: var(--ink-soft); margin: 10px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text], input[type=number], input[type=date], textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: #fbfbfa;
+    color: var(--ink);
+  }
+  textarea { resize: vertical; min-height: 44px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  button.primary { background: var(--teal); color: white; }
+  button.primary:hover { background: #275c51; }
+  button.ghost { background: var(--teal-soft); color: var(--teal); }
+  button.ghost:hover { background: #d3e3dd; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  .status-line { font-size: 0.78rem; color: var(--ink-soft); margin-top: 8px; min-height: 1em; }
+  .status-line.error { color: #b0473a; }
+
+  .task {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: #fdfdfc;
+  }
+  .task.done { border-color: var(--teal); background: var(--teal-soft); }
+  .task-title { font-weight: 600; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
+  .badge {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--amber);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .goal { font-size: 0.78rem; color: var(--ink-soft); margin: 2px 0 10px; }
+  .subtask { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+  .subtask span.title { flex: 1; font-size: 0.85rem; }
+  .subtask input[type=range] { flex: 1.2; accent-color: var(--teal); }
+  .subtask .pct { width: 34px; text-align: right; font-size: 0.78rem; color: var(--ink-soft); }
+  .empty-note { color: var(--ink-soft); font-size: 0.85rem; }
+
+  .chat-log {
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+    margin-bottom: 10px;
+  }
+  .msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; font-size: 0.88rem; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--teal); color: white; border-bottom-right-radius: 2px; }
+  .msg.assistant { align-self: flex-start; background: var(--teal-soft); color: var(--ink); border-bottom-left-radius: 2px; }
+  .chat-input { display: flex; gap: 8px; }
+  .chat-input textarea { flex: 1; min-height: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="eyebrow">Task Scheduler</div>
+      <h1 id="dateHeading">Today</h1>
+    </div>
+    <div class="ring-wrap">
+      <svg width="52" height="52" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="22" fill="none" stroke="var(--line)" stroke-width="5"/>
+        <circle id="ringProgress" cx="26" cy="26" r="22" fill="none" stroke="var(--teal)" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="138.2" stroke-dashoffset="138.2"
+                transform="rotate(-90 26 26)"/>
+      </svg>
+      <div class="ring-label"><strong id="ringPct">0%</strong>of today done</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Profile</h2>
+      <label>Goals</label>
+      <textarea id="profGoals" placeholder="e.g. finish thesis draft, get fitter, ship side project"></textarea>
+      <label>Weekly schedule (college hours etc.)</label>
+      <textarea id="profSchedule" placeholder="e.g. Mon/Wed/Fri classes 9am-2pm"></textarea>
+      <label>Baseline sleep (hrs)</label>
+      <input type="number" id="profSleep" step="0.5" min="0" max="14">
+      <div style="margin-top:10px;"><button class="primary" onclick="saveProfile()">Save profile</button></div>
+      <div class="status-line" id="profileStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Today's log</h2>
+      <div class="row2">
+        <div>
+          <label>Night sleep (hrs)</label>
+          <input type="number" id="logNight" step="0.5" min="0" max="14">
+        </div>
+        <div>
+          <label>Nap / afternoon sleep (hrs)</label>
+          <input type="number" id="logAfternoon" step="0.5" min="0" max="8">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>Morning energy (1-5)</label>
+          <select id="logMorningEnergy">
+            <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+          </select>
+        </div>
+        <div>
+          <label>Evening energy (1-5)</label>
+          <select id="logEveningEnergy">
+            <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+          </select>
+        </div>
+      </div>
+      <label>Notes (optional)</label>
+      <textarea id="logNotes" placeholder="anything worth remembering about today"></textarea>
+      <div style="margin-top:10px;"><button class="primary" onclick="saveLog()">Save today's log</button></div>
+      <div class="status-line" id="logStatus"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px;">
+    <h2>
+      Today's plan
+      <button class="ghost" id="generateBtn" onclick="generatePlan()">Generate plan</button>
+    </h2>
+    <div id="taskList"></div>
+    <div class="status-line" id="planStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>Check in</h2>
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-input">
+      <textarea id="chatInput" placeholder="Tell it about a schedule change, a bad day, whatever's going on..."></textarea>
+      <button class="primary" id="chatSendBtn" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const RING_CIRCUMFERENCE = 138.2;
+
+document.getElementById('dateHeading').textContent = new Date().toLocaleDateString(undefined, {
+  weekday: 'long', month: 'long', day: 'numeric'
+});
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* no body */ }
+  if (!res.ok) {
+    const message = (body && (body.message || body.error)) || res.statusText;
+    throw new Error(message);
+  }
+  return body;
+}
+
+// ---------- Profile ----------
+async function loadProfile() {
+  try {
+    const p = await api('/api/profile');
+    document.getElementById('profGoals').value = p.goals || '';
+    document.getElementById('profSchedule').value = p.weeklySchedule || '';
+    document.getElementById('profSleep').value = p.baselineSleep ?? 7.5;
+  } catch (e) {
+    setStatus('profileStatus', 'Could not load profile: ' + e.message, true);
+  }
+}
+
+async function saveProfile() {
+  setStatus('profileStatus', 'Saving...');
+  try {
+    await api('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goals: document.getElementById('profGoals').value,
+        weeklySchedule: document.getElementById('profSchedule').value,
+        baselineSleep: parseFloat(document.getElementById('profSleep').value || '7.5')
+      })
+    });
+    setStatus('profileStatus', 'Saved.');
+  } catch (e) {
+    setStatus('profileStatus', 'Save failed: ' + e.message, true);
+  }
+}
+
+// ---------- Daily log ----------
+async function saveLog() {
+  setStatus('logStatus', 'Saving...');
+  try {
+    await api('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: new Date().toISOString().slice(0, 10),
+        nightSleepHrs: parseFloat(document.getElementById('logNight').value || '0'),
+        afternoonSleepHrs: parseFloat(document.getElementById('logAfternoon').value || '0'),
+        morningEnergy: parseInt(document.getElementById('logMorningEnergy').value, 10),
+        eveningEnergy: parseInt(document.getElementById('logEveningEnergy').value, 10),
+        notes: document.getElementById('logNotes').value
+      })
+    });
+    setStatus('logStatus', 'Logged for today.');
+  } catch (e) {
+    setStatus('logStatus', 'Save failed: ' + e.message, true);
+  }
+}
+
+// ---------- Plan / tasks ----------
+async function loadToday() {
+  try {
+    const tasks = await api('/api/plan/today');
+    renderTasks(tasks);
+  } catch (e) {
+    setStatus('planStatus', 'Could not load today\'s plan: ' + e.message, true);
+  }
+}
+
+function renderTasks(tasks) {
+  const list = document.getElementById('taskList');
+  list.innerHTML = '';
+
+  if (!tasks || tasks.length === 0) {
+    list.innerHTML = '<div class="empty-note">No tasks yet for today. Hit "Generate plan" to have it build one from your profile and recent logs.</div>';
+    updateRing(0);
+    return;
+  }
+
+  let totalSub = 0, doneWeight = 0;
+
+  tasks.forEach(task => {
+    const div = document.createElement('div');
+    div.className = 'task' + (task.fullyDone ? ' done' : '');
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'task-title';
+    titleRow.innerHTML = escapeHtml(task.title) + (task.aiGenerated ? ' <span class="badge">AI</span>' : '');
+    div.appendChild(titleRow);
+
+    if (task.parentGoal) {
+      const goal = document.createElement('div');
+      goal.className = 'goal';
+      goal.textContent = task.parentGoal;
+      div.appendChild(goal);
+    }
+
+    (task.subTasks || []).forEach(st => {
+      totalSub++;
+      doneWeight += st.completed;
+
+      const row = document.createElement('div');
+      row.className = 'subtask';
+
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = st.title;
+
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = 0; slider.max = 100; slider.step = 5;
+      slider.value = st.completed;
+
+      const pct = document.createElement('span');
+      pct.className = 'pct';
+      pct.textContent = st.completed + '%';
+
+      slider.addEventListener('input', () => { pct.textContent = slider.value + '%'; });
+      slider.addEventListener('change', () => updateSubtask(st.id, parseInt(slider.value, 10)));
+
+      row.appendChild(title);
+      row.appendChild(slider);
+      row.appendChild(pct);
+      div.appendChild(row);
+    });
+
+    list.appendChild(div);
+  });
+
+  updateRing(totalSub > 0 ? Math.round(doneWeight / totalSub) : 0);
+}
+
+async function updateSubtask(id, completed) {
+  try {
+    await api('/api/subtask/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed })
+    });
+    loadToday();
+  } catch (e) {
+    setStatus('planStatus', 'Could not update subtask: ' + e.message, true);
+  }
+}
+
+async function generatePlan() {
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  setStatus('planStatus', 'Asking the planner for today\'s tasks...');
+  try {
+    await api('/api/plan/generate', { method: 'POST' });
+    setStatus('planStatus', 'Plan generated.');
+    loadToday();
+  } catch (e) {
+    setStatus('planStatus', 'Plan generation failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function updateRing(pct) {
+  const offset = RING_CIRCUMFERENCE - (RING_CIRCUMFERENCE * pct / 100);
+  document.getElementById('ringProgress').style.strokeDashoffset = offset;
+  document.getElementById('ringPct').textContent = pct + '%';
+}
+
+// ---------- Chat ----------
+async function loadChatHistory() {
+  try {
+    const history = await api('/api/chat/history');
+    const log = document.getElementById('chatLog');
+    log.innerHTML = '';
+    history.forEach(m => appendMessage(m.role, m.content));
+    log.scrollTop = log.scrollHeight;
+  } catch (e) {
+    // non-fatal, chat just starts empty
+  }
+}
+
+function appendMessage(role, content) {
+  const log = document.getElementById('chatLog');
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
+  div.textContent = content;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message) return;
+
+  const btn = document.getElementById('chatSendBtn');
+  appendMessage('user', message);
+  input.value = '';
+  btn.disabled = true;
+
+  try {
+    const res = await api('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+    appendMessage('assistant', res.reply);
+  } catch (e) {
+    appendMessage('assistant', 'Something went wrong reaching the model: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+function setStatus(id, text, isError) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'status-line' + (isError ? ' error' : '');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------- Init ----------
+loadProfile();
+loadToday();
+loadChatHistory();
+</script>
+</body>
+</html>
