@@ -19,6 +19,7 @@ public class ChatMessage {
     //attributes:
     private LocalDateTime timestamp;
     private String role;  //user or assistant
+    @Column(columnDefinition = "TEXT")
     private String content;
 
     //getters:

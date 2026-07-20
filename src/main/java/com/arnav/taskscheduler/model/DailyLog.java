@@ -21,6 +21,7 @@ public class DailyLog  {
     private float afternoonSleepHrs;
     private int morningEnergy; //1-5
     private int eveningEnergy;
+    @Column(columnDefinition = "TEXT")
     private String notes; //optional
 
     //getters:

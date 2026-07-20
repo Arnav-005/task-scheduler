@@ -15,7 +15,10 @@ public class UserProfile {
     //fields:-
 
     //attributes:
+    @Column(columnDefinition = "TEXT")
     private String goals;
+
+    @Column(columnDefinition = "TEXT")
     private String weeklySchedule;
     private float baselineSleep;
 

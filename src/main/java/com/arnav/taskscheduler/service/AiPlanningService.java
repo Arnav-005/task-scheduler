@@ -66,23 +66,23 @@ public class AiPlanningService {
             Do not diagnose clinically. Do not moralize. Be direct, not soft.
             """;
 
-    private final WebClient claudeWebClient;
+    private final WebClient geminiWebClient;
     private final ObjectMapper objectMapper;
     private final UserProfileService userProfileService;
     private final DailyLogService dailyLogService;
     private final TaskService taskService;
     private final ChatService chatService;
 
-    @Value("${claude.model}")
+    @Value("${gemini.model}")
     private String model;
 
-    public AiPlanningService(WebClient claudeWebClient,
+    public AiPlanningService(WebClient geminiWebClient,
                               ObjectMapper objectMapper,
                               UserProfileService userProfileService,
                               DailyLogService dailyLogService,
                               TaskService taskService,
                               ChatService chatService) {
-        this.claudeWebClient = claudeWebClient;
+        this.geminiWebClient = geminiWebClient;
         this.objectMapper = objectMapper;
         this.userProfileService = userProfileService;
         this.dailyLogService = dailyLogService;
@@ -100,13 +100,13 @@ public class AiPlanningService {
         String userPrompt = "Date to plan for: " + date + " (" + date.getDayOfWeek() + ")\n\n"
                 + "Context:\n" + context.toString();
 
-        String responseText = callClaude(PLAN_SYSTEM_PROMPT, userPrompt);
+        String responseText = callGemini(PLAN_SYSTEM_PROMPT, userPrompt);
 
         JsonNode planJson;
         try {
             planJson = extractJson(responseText);
         } catch (Exception e) {
-            throw new AiPlanningException("Claude's plan response wasn't valid JSON: " + e.getMessage(), e);
+            throw new AiPlanningException("Gemini's plan response wasn't valid JSON: " + e.getMessage(), e);
         }
 
         List<Task> createdTasks = new ArrayList<>();
@@ -156,7 +156,7 @@ public class AiPlanningService {
 
         String reply;
         try {
-            reply = callClaude(CHAT_SYSTEM_PROMPT, userPrompt);
+            reply = callGemini(CHAT_SYSTEM_PROMPT, userPrompt);
             if (reply.isBlank()) {
                 reply = "I didn't get a usable response back just now - mind trying that again?";
             }
@@ -224,44 +224,57 @@ public class AiPlanningService {
         return s == null ? "" : s;
     }
 
-    // --- Claude API call ---
+    // --- Gemini API call ---
 
-    private String callClaude(String systemPrompt, String userMessage) {
+    private String callGemini(String systemPrompt, String userMessage) {
         ObjectNode body = objectMapper.createObjectNode();
-        body.put("model", model);
-        body.put("max_tokens", 2048);
-        body.put("system", systemPrompt);
 
-        ArrayNode messages = body.putArray("messages");
-        ObjectNode userMsg = messages.addObject();
-        userMsg.put("role", "user");
-        userMsg.put("content", userMessage);
+        // System instruction (Gemini REST API uses camelCase)
+        ObjectNode systemInstruction = body.putObject("systemInstruction");
+        ArrayNode systemParts = systemInstruction.putArray("parts");
+        systemParts.addObject().put("text", systemPrompt);
+
+        // Contents
+        ArrayNode contents = body.putArray("contents");
+        ObjectNode userContent = contents.addObject();
+        userContent.put("role", "user");
+        ArrayNode userParts = userContent.putArray("parts");
+        userParts.addObject().put("text", userMessage);
 
         JsonNode response;
         try {
-            response = claudeWebClient.post()
-                    .bodyValue(body)
+            String rawResponse = geminiWebClient.post()
+                    .uri(uriBuilder -> uriBuilder.path(model + ":generateContent").build())
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .bodyValue(body.toString())
                     .retrieve()
-                    .bodyToMono(JsonNode.class)
+                    .bodyToMono(String.class)
                     .block();
+            response = objectMapper.readTree(rawResponse);
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            String errorBody = e.getResponseBodyAsString();
+            throw new AiPlanningException("Gemini API call failed: " + e.getMessage() + " - Body: " + errorBody, e);
         } catch (Exception e) {
-            throw new AiPlanningException("Claude API call failed: " + e.getMessage(), e);
+            throw new AiPlanningException("Gemini API call failed: " + e.getMessage(), e);
         }
 
         if (response == null) {
-            throw new AiPlanningException("Empty response from Claude API");
+            throw new AiPlanningException("Empty response from Gemini API");
         }
         if (response.has("error")) {
-            throw new AiPlanningException("Claude API returned an error: "
+            throw new AiPlanningException("Gemini API returned an error: "
                     + response.path("error").path("message").asText());
         }
 
         StringBuilder sb = new StringBuilder();
-        JsonNode contentArray = response.path("content");
-        if (contentArray.isArray()) {
-            for (JsonNode block : contentArray) {
-                if ("text".equals(block.path("type").asText())) {
-                    sb.append(block.path("text").asText());
+        JsonNode candidates = response.path("candidates");
+        if (candidates.isArray() && !candidates.isEmpty()) {
+            JsonNode parts = candidates.get(0).path("content").path("parts");
+            if (parts.isArray()) {
+                for (JsonNode part : parts) {
+                    if (part.has("text")) {
+                        sb.append(part.path("text").asText());
+                    }
                 }
             }
         }
